@@ -1,11 +1,11 @@
 package com.dokany.kotlin.constants
 
-import com.dokany.kotlin.structure.EnumInteger
+import com.dokany.kotlin.structure.EnumInt
 
 enum class MountOption(
         override val mask: Int,
         val description: String
-) : EnumInteger {
+) : EnumInt {
     DEBUG_MODE(1, "Enable ouput debug message"),
 
     STD_ERR_OUTPUT(2, "Enable ouput debug message to stderr"),

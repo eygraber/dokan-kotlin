@@ -1,11 +1,11 @@
 package com.dokany.kotlin.constants
 
-import com.dokany.kotlin.structure.EnumInteger
+import com.dokany.kotlin.structure.EnumInt
 import com.sun.jna.platform.win32.NTStatus
 
 enum class NtStatus(
         override val mask: Int
-) : EnumInteger {
+) : EnumInt {
     SUCCESS(NTStatus.STATUS_SUCCESS),
 
     WAIT_1(NTStatus.STATUS_WAIT_1),
@@ -281,6 +281,7 @@ enum class NtStatus(
 
     DIRECTORY_NOT_EMPTY(-0x3ffffeff),
     NOT_A_DIRECTORY(-0x3ffffefd),
+    IS_A_DIRECTORY(-0x3fffff46),
 
     MAPPED_FILE_SIZE_ZERO(-0x3ffffee2),
     TOO_MANY_OPENED_FILES(-0x3ffffee1),

@@ -1,6 +1,6 @@
 package com.dokany.kotlin.constants
 
-import com.dokany.kotlin.structure.EnumInteger
+import com.dokany.kotlin.structure.EnumInt
 import com.sun.jna.platform.win32.WinNT
 
 /**
@@ -10,7 +10,7 @@ import com.sun.jna.platform.win32.WinNT
  */
 enum class FileSystemFeature(
         override val mask: Int
-) : EnumInteger {
+) : EnumInt {
     NONE(0),
 
     CASE_SENSITIVE_SEARCH(WinNT.FILE_CASE_SENSITIVE_SEARCH),

@@ -84,11 +84,12 @@ object NativeMethods {
      * @param outCreationDisposition
      */
     external fun DokanMapKernelToUserCreateFileFlags(
-            fileAttributes: Long,
-            createOptions: Long,
-            createDisposition: Long,
+            fileAttributes: Int,
+            createOptions: Int,
+            createDisposition: Int,
             outFileAttributesAndFlags: IntByReference,
-            outCreationDisposition: IntByReference)
+            outCreationDisposition: IntByReference
+    )
 
     /**
      * Convert IRP_MJ_CREATE DesiredAccess to generic rights.
@@ -98,7 +99,7 @@ object NativeMethods {
      * @see {@linkplain https://msdn.microsoft.com/windows/hardware/drivers/ifs/access-mask}
      */
     // TODO: change return type and method parameter type to FileAccess
-    external fun DokanMapStandardToGenericAccess(desiredAccess: Long): Long
+    external fun DokanMapStandardToGenericAccess(desiredAccess: Int): Int
 
     /**
      * Checks whether Name can match Expression.
@@ -182,5 +183,5 @@ object NativeMethods {
      * @return NtStatus associated to the error
      */
     // TODO: Switch to NtStatus return type
-    external fun DokanNtStatusFromWin32(error: Int): Long
+    external fun DokanNtStatusFromWin32(error: Int): Int
 }

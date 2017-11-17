@@ -139,7 +139,8 @@ open class DokanyOperations: Structure() {
                 rawShareAccess: Int,
                 rawCreateDisposition: Int,
                 rawCreateOptions: Int,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo?
+        ): Int
     }
 
     /**
@@ -157,7 +158,8 @@ open class DokanyOperations: Structure() {
          */
         fun callback(
                 rawPath: WString,
-                dokanyFileInfo: DokanyFileInfo)
+                dokanyFileInfo: DokanyFileInfo
+        )
     }
 
     /**
@@ -176,7 +178,8 @@ open class DokanyOperations: Structure() {
          */
         fun callback(
                 rawPath: WString,
-                dokanyFileInfo: DokanyFileInfo)
+                dokanyFileInfo: DokanyFileInfo
+        )
     }
 
     /**
@@ -201,7 +204,8 @@ open class DokanyOperations: Structure() {
                 rawBufferLength: Int,
                 rawReadLength: IntByReference,
                 rawOffset: Long,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -226,7 +230,8 @@ open class DokanyOperations: Structure() {
                 rawNumberOfBytesToWrite: Int,
                 rawNumberOfBytesWritten: IntByReference,
                 rawOffset: Long,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
 
     }
 
@@ -243,7 +248,8 @@ open class DokanyOperations: Structure() {
          */
         fun callback(
                 rawPath: WString,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -262,7 +268,8 @@ open class DokanyOperations: Structure() {
         fun callback(
                 fileName: WString,
                 handleFileInfo: ByHandleFileInfo,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -280,7 +287,8 @@ open class DokanyOperations: Structure() {
         fun callback(
                 rawPath: WString,
                 rawFillFindData: IFillWin32FindData,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -301,7 +309,8 @@ open class DokanyOperations: Structure() {
                 fileName: WString,
                 searchPattern: WString,
                 rawFillFindData: IFillWin32FindData,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -319,7 +328,8 @@ open class DokanyOperations: Structure() {
         fun callback(
                 rawPath: WString,
                 rawAttributes: Int,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -341,7 +351,8 @@ open class DokanyOperations: Structure() {
                 rawCreationTime: WinBase.FILETIME,
                 rawLastAccessTime: WinBase.FILETIME,
                 rawLastWriteTime: WinBase.FILETIME,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -368,7 +379,8 @@ open class DokanyOperations: Structure() {
          */
         fun callback(
                 rawPath: WString,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -386,7 +398,8 @@ open class DokanyOperations: Structure() {
          */
         fun callback(
                 rawPath: WString,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -406,7 +419,8 @@ open class DokanyOperations: Structure() {
                 rawPath: WString,
                 rawNewFileName: WString,
                 rawReplaceIfExisting: Boolean,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -424,7 +438,8 @@ open class DokanyOperations: Structure() {
         fun callback(
                 rawPath: WString,
                 rawByteOffset: Long,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -442,7 +457,8 @@ open class DokanyOperations: Structure() {
         fun callback(
                 rawPath: WString,
                 rawLength: Long,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -462,7 +478,8 @@ open class DokanyOperations: Structure() {
                 rawPath: WString,
                 rawByteOffset: Long,
                 rawLength: Long,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -482,7 +499,8 @@ open class DokanyOperations: Structure() {
                 rawPath: WString,
                 rawByteOffset: Long,
                 rawLength: Long,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -507,7 +525,8 @@ open class DokanyOperations: Structure() {
                 freeBytesAvailable: LongByReference,
                 totalNumberOfBytes: LongByReference,
                 totalNumberOfFreeBytes: LongByReference,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -550,7 +569,8 @@ open class DokanyOperations: Structure() {
                 /* FileSystemFeatures */ rawFileSystemFlags: IntByReference,
                 rawFileSystemNameBuffer: Pointer,
                 rawFileSystemNameSize: Int,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -559,7 +579,8 @@ open class DokanyOperations: Structure() {
      */
     interface IMounted : Callback {
         fun mounted(
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -568,7 +589,8 @@ open class DokanyOperations: Structure() {
      */
     interface IUnmounted : Callback {
         fun unmounted(
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -594,7 +616,8 @@ open class DokanyOperations: Structure() {
                 rawSecurityDescriptor: Pointer,
                 rawSecurityDescriptorLength: Int,
                 rawSecurityDescriptorLengthNeeded: IntByReference,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -619,7 +642,8 @@ open class DokanyOperations: Structure() {
                 // @TODO: This is a pointer??
                 rawSecurityDescriptor: Pointer,
                 rawSecurityDescriptorLength: Int,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
 
@@ -631,7 +655,8 @@ open class DokanyOperations: Structure() {
          */
         fun fillWin32FindData(
                 rawFillFindData: WinBase.WIN32_FIND_DATA,
-                dokanyFileInfo: DokanyFileInfo)
+                dokanyFileInfo: DokanyFileInfo
+        )
     }
 
     /**
@@ -649,7 +674,8 @@ open class DokanyOperations: Structure() {
         fun callback(
                 rawPath: WString,
                 rawFillFindData: IFillWin32FindStreamData,
-                dokanyFileInfo: DokanyFileInfo): Long
+                dokanyFileInfo: DokanyFileInfo
+        ): Int
     }
 
     /**
@@ -665,7 +691,8 @@ open class DokanyOperations: Structure() {
          */
         fun callback(
                 rawFillFindData: Win32FindStreamData,
-                dokanyFileInfo: DokanyFileInfo)
+                dokanyFileInfo: DokanyFileInfo
+        )
     }
 
     interface Win32FindStreamDataInterface {

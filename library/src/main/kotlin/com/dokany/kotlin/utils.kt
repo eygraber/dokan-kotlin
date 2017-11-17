@@ -43,9 +43,18 @@ internal fun Long.msToFiletime() = WinBase.FILETIME(Date(this))
 
 internal fun <T : Any> T.logger() = LoggerFactory.getLogger(javaClass)
 
-internal fun Throwable.toErrorCode(defaultVal: Long = NtStatus.UNSUCCESSFUL.mask.toLong()) = when {
-    this is DokanyException -> value
-    this is FileNotFoundException -> ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
-    this is FileAlreadyExistsException -> ErrorCode.ERROR_ALREADY_EXISTS.mask.toLong()
+internal fun Throwable.toErrorCode(defaultVal: Int = NtStatus.UNSUCCESSFUL.mask) = when {
+    this is FileNotFoundException -> ErrorCode.ERROR_FILE_NOT_FOUND.mask
+    this is FileAlreadyExistsException -> ErrorCode.ERROR_ALREADY_EXISTS.mask
     else -> defaultVal
 }
+
+internal data class HighLow(
+        val high: Int,
+        val low: Int
+)
+
+internal fun Long.toHighLow() = HighLow(
+        (this shr 32 and 0xffffffffL).toInt(),
+        (this and 0xffffffffL).toInt()
+)

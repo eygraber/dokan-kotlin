@@ -1,10 +1,10 @@
 package com.dokany.kotlin.constants
 
-import com.dokany.kotlin.structure.EnumInteger
+import com.dokany.kotlin.structure.EnumInt
 
 enum class ErrorCode(
         override val mask: Int
-) : EnumInteger {
+) : EnumInt {
     SUCCESS(0),
 
     ERROR_WRITE_FAULT(29),

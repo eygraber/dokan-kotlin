@@ -1,6 +1,6 @@
 package com.dokany.kotlin.constants
 
-import com.dokany.kotlin.structure.EnumInteger
+import com.dokany.kotlin.structure.EnumInt
 import com.sun.jna.platform.win32.WinNT
 
 /**
@@ -8,7 +8,7 @@ import com.sun.jna.platform.win32.WinNT
  * @see {@linkplain https://msdn.microsoft.com/en-us/library/gg258117(v=vs.85).aspx}
  *
  */
-enum class FileAttribute(override val mask: Int) : EnumInteger {
+enum class FileAttribute(override val mask: Int) : EnumInt {
     ARCHIVE(WinNT.FILE_ATTRIBUTE_ARCHIVE),
 
     COMPRESSED(WinNT.FILE_ATTRIBUTE_COMPRESSED),

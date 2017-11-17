@@ -4,11 +4,16 @@ import com.dokany.kotlin.DokanyDriver
 import com.dokany.kotlin.constants.FileSystemFeature
 import com.dokany.kotlin.constants.MountOption
 import com.dokany.kotlin.samples.logger
+import com.dokany.kotlin.samples.recursiveSize
 import com.dokany.kotlin.structure.DeviceOptions
 import com.dokany.kotlin.structure.FreeSpace
 import com.dokany.kotlin.structure.VolumeInformation
-import com.dokany.kotlin.structure.enumIntegerSetOf
+import com.dokany.kotlin.structure.enumSetOf
+import java.io.File
+import java.nio.file.Files
 import java.util.*
+
+
 
 fun main(args: Array<String>) {
     MountMirrorFS().start()
@@ -23,7 +28,7 @@ class MountMirrorFS {
         val mountPoint = "K:\\"
         val threadCount: Short = 1
 
-        val mountOptions = enumIntegerSetOf(
+        val mountOptions = enumSetOf(
                 MountOption.DEBUG_MODE,
                 MountOption.STD_ERR_OUTPUT,
                 MountOption.MOUNT_MANAGER
@@ -35,7 +40,7 @@ class MountMirrorFS {
         val sectorSize = 4096L
 
         val deviceOptions = DeviceOptions(
-                100,
+                105,
                 mountPoint,
                 threadCount,
                 mountOptions,
@@ -45,7 +50,7 @@ class MountMirrorFS {
                 sectorSize
         )
 
-        val fsFeatures = enumIntegerSetOf(
+        val fsFeatures = enumSetOf(
                 FileSystemFeature.CASE_PRESERVED_NAMES,
                 FileSystemFeature.CASE_SENSITIVE_SEARCH,
                 FileSystemFeature.PERSISTENT_ACLS,
@@ -61,11 +66,14 @@ class MountMirrorFS {
                 fsFeatures
         )
 
-        val freeSpace = FreeSpace(200_000, 200)
+        val rootFile = File("C:\\Users\\eli\\Desktop\\mirror_this")
+        val store = Files.getFileStore(rootFile.toPath())
+
+        val freeSpace = FreeSpace(store.totalSpace, rootFile.recursiveSize())
 
         val mirrorFS = MirrorFS(
                 deviceOptions,
-                "C:\\Users\\eli\\Desktop\\mirror_this",
+                rootFile.absolutePath,
                 volumeInfo,
                 freeSpace,
                 Date()

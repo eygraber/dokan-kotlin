@@ -1,12 +1,12 @@
 package com.dokany.kotlin.constants
 
-import com.dokany.kotlin.structure.EnumInteger
+import com.dokany.kotlin.structure.EnumInt
 import com.sun.jna.platform.win32.WinNT
 
-enum class CreationDisposition(
+enum class CreateDisposition(
         override val mask: Int,
         val description: String
-) : EnumInteger {
+) : EnumInt {
     /*-
      *                          |                    When the file...
     This argument:           |             Exists            Does not exist

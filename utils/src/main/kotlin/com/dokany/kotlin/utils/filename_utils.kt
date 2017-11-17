@@ -184,37 +184,33 @@ internal fun String.normalizePath(separator: Char = UNIX_SEPARATOR, keepSeparato
     }
 
     // adjoining slashes
-    run {
-        var i = prefix + 1
-        while (i < size) {
-            if (array[i] == separator && array[i - 1] == separator) {
-                System.arraycopy(array, i, array, i - 1, size - i)
-                size--
-                i--
-            }
-            i++
+    var i = prefix + 1
+    while (i < size) {
+        if (array[i] == separator && array[i - 1] == separator) {
+            System.arraycopy(array, i, array, i - 1, size - i)
+            size--
+            i--
         }
+        i++
     }
 
     // dot slash
-    run {
-        var i = prefix + 1
-        while (i < size) {
-            if (array[i] == separator && array[i - 1] == '.' &&
-                    (i == prefix + 1 || array[i - 2] == separator)) {
-                if (i == size - 1) {
-                    lastIsDirectory = true
-                }
-                System.arraycopy(array, i + 1, array, i - 1, size - i)
-                size -= 2
-                i--
+    i = prefix + 1
+    while (i < size) {
+        if (array[i] == separator && array[i - 1] == '.' &&
+                (i == prefix + 1 || array[i - 2] == separator)) {
+            if (i == size - 1) {
+                lastIsDirectory = true
             }
-            i++
+            System.arraycopy(array, i + 1, array, i - 1, size - i)
+            size -= 2
+            i--
         }
+        i++
     }
 
     // double dot slash
-    var i = prefix + 2
+    i = prefix + 2
     outer@ while (i < size) {
         if (array[i] == separator && array[i - 1] == '.' && array[i - 2] == '.' &&
                 (i == prefix + 2 || array[i - 3] == separator)) {

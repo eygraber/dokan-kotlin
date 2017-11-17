@@ -2,24 +2,26 @@ package com.dokany.kotlin.structure
 
 import java.util.*
 
-interface EnumInteger {
+interface EnumInt {
     val mask: Int
 }
 
-class EnumIntegerSet<T>(
+class EnumIntSet<T>(
         private val elements: EnumSet<T>
 ) : Set<T> by elements
-        where T : EnumInteger, T : Enum<T> {
+        where T : EnumInt, T : Enum<T> {
     fun toInt() = elements.fold(0) { currentReturn, value ->
         currentReturn or value.mask
     }
+
+    fun containsAll(vararg vals: T): Boolean = containsAll(vals.toList())
 }
 
-inline fun <reified T> enumIntegerSetOf(vararg values: T) where T : EnumInteger, T : Enum<T> = EnumIntegerSet(EnumSet.noneOf(T::class.java).apply {
+inline fun <reified T> enumSetOf(vararg values: T) where T : EnumInt, T : Enum<T> = EnumIntSet(EnumSet.noneOf(T::class.java).apply {
     addAll(values)
 })
 
-inline fun <reified T> enumSetFromInt(value: Int) where T : EnumInteger, T : Enum<T> = enumValues<T>().let { values ->
+inline fun <reified T> enumSetFromInt(value: Int) where T : EnumInt, T : Enum<T> = enumValues<T>().let { values ->
     val containing = ArrayList<T>(values.size)
 
     values.fold(value) { remainingValues, enumValue ->
@@ -38,11 +40,11 @@ inline fun <reified T> enumSetFromInt(value: Int) where T : EnumInteger, T : Enu
         }
     }
 
-    enumIntegerSetOf(*containing.toTypedArray())
+    enumSetOf(*containing.toTypedArray())
 }
 
 inline fun <reified T> enumFromInt(value: Int): T
-        where T : EnumInteger, T : Enum<T> =
+        where T : EnumInt, T : Enum<T> =
         enumValues<T>().let { values ->
             values.find {
                 when {

@@ -1,0 +1,17 @@
+package com.dokany.kotlin.constants
+
+import com.dokany.kotlin.structure.EnumInt
+import com.sun.jna.platform.win32.WinNT
+
+enum class FileOptions(override val mask: Int) : EnumInt {
+    ASYNCHRONOUS(WinNT.FILE_FLAG_OVERLAPPED),
+    BACKUP_SEMANTICS(WinNT.FILE_FLAG_BACKUP_SEMANTICS),
+    DELETE_ON_CLOSE(WinNT.FILE_FLAG_DELETE_ON_CLOSE),
+    DIRECTORY_FILE(0x00000001),
+    ENCRYPTED(WinNT.FILE_ATTRIBUTE_ENCRYPTED),
+    NONE(0),
+    NON_DIRECTORY_FILE(0x00000040),
+    RANDOM_ACCESS(WinNT.FILE_FLAG_RANDOM_ACCESS),
+    SEQUENTIAL_SCAN(WinNT.FILE_FLAG_SEQUENTIAL_SCAN),
+    WRITE_THROUGH(WinNT.FILE_FLAG_WRITE_THROUGH)
+}

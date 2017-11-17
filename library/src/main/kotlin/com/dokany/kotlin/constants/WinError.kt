@@ -1,10 +1,10 @@
 package com.dokany.kotlin.constants
 
-import com.dokany.kotlin.structure.EnumInteger
+import com.dokany.kotlin.structure.EnumInt
 
 enum class WinError(
         override val mask: Int
-) : EnumInteger {
+) : EnumInt {
     ERROR_INVALID_FUNCTION(1),
 
     ERROR_FILE_NOT_FOUND(2),

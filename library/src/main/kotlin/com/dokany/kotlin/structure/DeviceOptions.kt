@@ -20,7 +20,7 @@ class DeviceOptions(
         internal val version: Short = 105,
         internal val mountPoint: String? = null,
         internal val threadCount: Short = 0,
-        internal val mountOptions: EnumIntegerSet<MountOption> = enumIntegerSetOf(),
+        internal val mountOptions: EnumIntSet<MountOption> = enumSetOf(),
         internal val uncName: String? = null,
         internal val timeout: Long = 0,
         internal val allocationUnitSize: Long = 0,

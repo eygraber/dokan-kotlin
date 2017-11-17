@@ -1,7 +1,8 @@
 package com.dokany.kotlin.structure
 
-import com.dokany.kotlin.*
-import com.dokany.kotlin.constants.FileAttribute
+import com.dokany.kotlin.DokanyOperations
+import com.dokany.kotlin.DokanyOperationsProxy
+import com.dokany.kotlin.trimToSize
 import com.sun.jna.Structure
 import com.sun.jna.platform.win32.WinBase
 import java.util.*
@@ -39,27 +40,25 @@ import java.util.*
  */
 class ByHandleFileInfo(
         private var filePath: String? = null,
-        private var fileIndex: Long = 0,
-        private val fileAttributes: EnumIntegerSet<FileAttribute> = enumIntegerSetOf(),
+        fileAttributes: Int = 0,
         private val volumeSerialNumber: Int = 0,
-        private val creationTime: Long = 0,
-        private val lastAccessTime: Long = 0,
-        private val lastWriteTime: Long = 0,
-        private var fileSize: Long = 0
+        creationTime: WinBase.FILETIME = WinBase.FILETIME(),
+        lastAccessTime: WinBase.FILETIME = WinBase.FILETIME(),
+        lastWriteTime: WinBase.FILETIME = WinBase.FILETIME(),
+        highSize: Int = 0,
+        lowSize: Int = 0,
+        highIndex: Int = 0,
+        lowIndex: Int = 0
 ) : Structure(), Structure.ByReference {
-    private val now = getCurrentFiletime()
-    private val largeFileSize = fileSize.toLargeInt()
-    private val largeIndex = fileIndex.toLargeInt()
-
-    @JvmField internal var dwFileAttributes = fileAttributes.toInt()
-    @JvmField internal var ftCreationTime = if(creationTime == 0L) now else creationTime.msToFiletime()
-    @JvmField internal var ftLastAccessTime = if(lastAccessTime == 0L) now else lastAccessTime.msToFiletime()
-    @JvmField internal var ftLastWriteTime = if(lastWriteTime == 0L) now else lastWriteTime.msToFiletime()
+    @JvmField internal var dwFileAttributes = fileAttributes
+    @JvmField internal var ftCreationTime = creationTime
+    @JvmField internal var ftLastAccessTime = lastAccessTime
+    @JvmField internal var ftLastWriteTime = lastWriteTime
     @JvmField internal var dwVolumeSerialNumber = volumeSerialNumber
-    @JvmField internal var nFileSizeHigh = if(fileSize != 0L) largeFileSize?.high?.toInt() ?: fileSize.toInt() else 0
-    @JvmField internal var nFileSizeLow = if(fileSize != 0L) largeFileSize?.low?.toInt() ?: fileSize.toInt() else 0
-    @JvmField internal var nFileIndexHigh = if(fileIndex != 0L) largeIndex?.high?.toInt() ?: fileIndex.toInt() else 0
-    @JvmField internal var nFileIndexLow = if(fileIndex != 0L) largeIndex?.low?.toInt() ?: fileIndex.toInt() else 0
+    @JvmField internal var nFileSizeHigh = highSize
+    @JvmField internal var nFileSizeLow = lowSize
+    @JvmField internal var nFileIndexHigh = highIndex
+    @JvmField internal var nFileIndexLow = lowIndex
     @JvmField internal var dwNumberOfLinks: Int = 1
 
     fun toWin32FindData(): WinBase.WIN32_FIND_DATA {
@@ -91,9 +90,11 @@ class ByHandleFileInfo(
 
         infoToReceive.filePath = filePath
 
-        infoToReceive.setSize(fileSize, nFileSizeHigh, nFileSizeLow)
+        infoToReceive.nFileSizeHigh = nFileSizeHigh
+        infoToReceive.nFileSizeLow = nFileSizeLow
 
-        infoToReceive.setIndex(fileIndex, nFileIndexHigh, nFileIndexLow)
+        infoToReceive.nFileIndexHigh = nFileIndexHigh
+        infoToReceive.nFileIndexLow = nFileIndexLow
 
         infoToReceive.dwFileAttributes = dwFileAttributes
 
@@ -101,25 +102,6 @@ class ByHandleFileInfo(
 
         infoToReceive.dwNumberOfLinks = dwNumberOfLinks
         infoToReceive.dwVolumeSerialNumber = dwVolumeSerialNumber
-    }
-
-    private fun setSize(size: Long, sizeHigh: Int, sizeLow: Int) {
-        fileSize = size
-
-        val largeInt = size.toLargeInt(sizeHigh, sizeLow)
-
-        nFileSizeHigh = if (size != 0L && sizeHigh == 0) largeInt?.high?.toInt() ?: size.toInt() else size.toInt()
-        nFileSizeLow = if (size != 0L && sizeLow == 0) largeInt?.low?.toInt() ?: size.toInt() else size.toInt()
-
-    }
-
-    private fun setIndex(index: Long, indexHigh: Int, indexLow: Int) {
-        fileIndex = index
-
-        val largeInt = index.toLargeInt(indexHigh, indexLow)
-
-        nFileIndexHigh = if (index != 0L && indexHigh == 0) largeInt?.high?.toInt() ?: index.toInt() else index.toInt()
-        nFileIndexLow = if (index != 0L && indexLow == 0) largeInt?.low?.toInt() ?: index.toInt() else index.toInt()
     }
 
     private fun setTimes(creationTime: WinBase.FILETIME, lastAccessTime: WinBase.FILETIME, lastWriteTime: WinBase.FILETIME) {

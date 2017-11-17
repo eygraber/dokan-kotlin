@@ -1,11 +1,11 @@
 package com.dokany.kotlin.constants
 
-import com.dokany.kotlin.structure.EnumInteger
+import com.dokany.kotlin.structure.EnumInt
 
 enum class MountError(
         override val mask: Int,
         val description: String
-) : EnumInteger {
+) : EnumInt {
     SUCCESS(0, "Successfully mounted"),
 
     MOUNT_ERROR(-1, "Mount error"),

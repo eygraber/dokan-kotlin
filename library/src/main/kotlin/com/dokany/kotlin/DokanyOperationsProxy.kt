@@ -1,12 +1,10 @@
 package com.dokany.kotlin
 
-import com.dokany.kotlin.constants.ErrorCode
-import com.dokany.kotlin.constants.FileAttribute
-import com.dokany.kotlin.constants.NtStatus
+import com.dokany.kotlin.constants.*
 import com.dokany.kotlin.structure.*
 import com.sun.jna.Pointer
 import com.sun.jna.WString
-import com.sun.jna.platform.win32.Kernel32
+import com.sun.jna.platform.win32.Win32Exception
 import com.sun.jna.platform.win32.WinBase
 import com.sun.jna.platform.win32.WinError.ERROR_READ_FAULT
 import com.sun.jna.platform.win32.WinError.ERROR_WRITE_FAULT
@@ -24,7 +22,7 @@ class DokanyOperationsProxy(
         log: Logger = logger()
 ) : DokanyOperations() {
     init {
-        ZwCreateFile = _ZwCreateFile()
+        ZwCreateFile = _ZwCreateFile(fileSystem, log)
         Cleanup = _Cleanup(fileSystem, log)
         CloseFile = _CloseFile(log)
         ReadFile = _ReadFile(fileSystem, log)
@@ -81,7 +79,10 @@ class DokanyOperationsProxy(
 	OPEN_EXISTING      +-----------+        Opens                Fails
 	TRUNCATE_EXISTING        |            Truncates              Fails
 	 */
-    private class _ZwCreateFile : IZwCreateFile {
+    private class _ZwCreateFile(
+            private val fileSystem: DokanyFileSystem,
+            private val log: Logger
+    ) : IZwCreateFile {
         override fun callback(
                 rawPath: WString,
                 securityContext: WinBase.SECURITY_ATTRIBUTES,
@@ -90,14 +91,65 @@ class DokanyOperationsProxy(
                 rawShareAccess: Int,
                 rawCreateDisposition: Int,
                 rawCreateOptions: Int,
-                dokanyFileInfo: DokanyFileInfo
-        ): Long {
+                dokanyFileInfo: DokanyFileInfo?
+        ): Int {
+            if(dokanyFileInfo == null) {
+                logger().error("There was an error creating file - dokanyFileInfo was null")
+                return NtStatus.UNSUCCESSFUL.mask
+            }
+
             // Normalize path
-            val normalizedPath = rawPath.normalizedPath()
+            val normalizedPath = rawPath.normalizedPath() ?: return NtStatus.OBJECT_NAME_NOT_FOUND.mask
 
-            Kernel32.INSTANCE.CreateFile(normalizedPath, rawDesiredAccess, rawShareAccess, securityContext, rawCreateDisposition, rawFileAttributes, null)
+            val fileAttributeAndFlagsRef = IntByReference()
+            val createDispositionRef = IntByReference()
 
-            return ErrorCode.SUCCESS.mask.toLong()
+            NativeMethods.DokanMapKernelToUserCreateFileFlags(
+                    rawFileAttributes,
+                    rawCreateOptions,
+                    rawCreateDisposition,
+                    fileAttributeAndFlagsRef,
+                    createDispositionRef
+            )
+
+            val fileAttributes = enumSetFromInt<FileAttribute>(fileAttributeAndFlagsRef.value)
+            val fileOptions = enumSetFromInt<FileOptions>(fileAttributeAndFlagsRef.value)
+            val desiredAccess = enumSetFromInt<FileAccess>(NativeMethods.DokanMapStandardToGenericAccess(rawDesiredAccess))
+            val shareAccess = enumSetFromInt<FileShare>(rawShareAccess)
+            val createDisposition = enumFromInt<FileMode>(createDispositionRef.value)
+
+            val filePath = if(normalizedPath.isBlank()) "\\" else normalizedPath
+
+            // hacks borrowed from https://github.com/viciousviper/DokanCloudFS/blob/master/DokanCloudFS/CloudOperations.cs#L165
+            return if(filePath == "\\") {
+                dokanyFileInfo.IsDirectory = true.toByte()
+                return NtStatus.SUCCESS.mask
+            }
+            else if(filePath == "\\*" && desiredAccess.contains(FileAccess.READ_ATTRIBUTES)) {
+                return NtStatus.SUCCESS.mask
+            }
+            else {
+                try {
+                    val fileInfo = dokanyFileInfo.toFileInfo()
+                    fileSystem.createFile(
+                            filePath,
+                            securityContext,
+                            desiredAccess,
+                            fileAttributes,
+                            shareAccess,
+                            createDisposition,
+                            fileOptions,
+                            fileInfo
+                    ).mask.apply {
+                        dokanyFileInfo.Context = fileInfo.context
+                        dokanyFileInfo.IsDirectory = fileInfo.isDirectory.toByte()
+                    }
+                }
+                catch(e: Throwable) {
+                    logger().error("There was an error creating file", e)
+                    NtStatus.UNSUCCESSFUL.mask
+                }
+            }
         }
     }
 
@@ -115,7 +167,7 @@ class DokanyOperationsProxy(
 
             try {
                 rawPath.normalizedPath()?.let { normalizedPath ->
-                    fileSystem.cleanup(normalizedPath, dokanyFileInfo)
+                    fileSystem.cleanup(normalizedPath, dokanyFileInfo.toFileInfo())
 
                     log.trace("Cleaned up: {}", normalizedPath)
                 } ?: log.warn("Couldn't cleanup file because {} couldn't be normalized", rawPath)
@@ -141,7 +193,7 @@ class DokanyOperationsProxy(
                 // TODO: Can close always be done here not matter the FS?
                 // dokanyFileInfo.Context = 0;
                 val normalizedPath = rawPath.normalizedPath()
-                // fileSystem.close(normalizedPath, dokanyFileInfo);
+                // fileSystem.close(normalizedPath, dokanyFileInfo.toFileInfo());
 
                 log.trace("Closed file: {}", normalizedPath)
             } catch (e: Throwable) {
@@ -159,7 +211,7 @@ class DokanyOperationsProxy(
                 rawPath: WString,
                 rawFillFindData: IFillWin32FindData,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
             return _FindFilesWithPattern(fileSystem, log).callback(rawPath, WString(""), rawFillFindData, dokanyFileInfo)
         }
     }
@@ -173,18 +225,18 @@ class DokanyOperationsProxy(
                 searchPattern: WString,
                 rawFillFindData: IFillWin32FindData,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val pathToSearch = fileName.normalizedPath()
             log.trace("FindFilesWithPattern {}", pathToSearch)
 
             if(pathToSearch == null) {
                 log.warn("Couldn't find files with pattern because {} couldn't be normalized", fileName)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
-                val filesFound = fileSystem.findFilesWithPattern(pathToSearch, dokanyFileInfo, searchPattern.toString())
+                val filesFound = fileSystem.findFilesWithPattern(pathToSearch, dokanyFileInfo.toFileInfo(), searchPattern.toString())
                 log.debug("Found {} paths", filesFound.size)
                 try {
                     filesFound.forEach { file ->
@@ -195,7 +247,7 @@ class DokanyOperationsProxy(
                     log.warn("Error filling Win32FindData", e)
                 }
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -214,19 +266,19 @@ class DokanyOperationsProxy(
                 rawReadLength: IntByReference,
                 rawOffset: Long,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.debug("ReadFile: {} with readLength ", normalizedPath, rawBufferLength)
 
-            if (dokanyFileInfo.isDirectory) {
+            if (dokanyFileInfo.IsDirectory.toBoolean()) {
                 log.trace("isDir:will throw file not found error")
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             if(normalizedPath == null) {
                 log.warn("Couldn't read file because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
@@ -241,9 +293,9 @@ class DokanyOperationsProxy(
 
                 rawReadLength.value = numRead
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
-                t.toErrorCode(ERROR_READ_FAULT.toLong())
+                t.toErrorCode(ERROR_READ_FAULT)
             }
         }
     }
@@ -259,14 +311,14 @@ class DokanyOperationsProxy(
                 rawNumberOfBytesWritten: IntByReference,
                 rawOffset: Long,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.debug("WriteFile: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't write file because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
@@ -275,9 +327,9 @@ class DokanyOperationsProxy(
                 val written = fileSystem.write(normalizedPath, rawOffset.toInt(), data, rawNumberOfBytesToWrite)
                 rawNumberOfBytesWritten.value = written
                 log.debug("Wrote this number of bytes: {}", written)
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
-                t.toErrorCode(ERROR_WRITE_FAULT.toLong())
+                t.toErrorCode(ERROR_WRITE_FAULT)
             }
 
         }
@@ -290,21 +342,21 @@ class DokanyOperationsProxy(
         override fun callback(
                 rawPath: WString,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("FlushFileBuffers: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't flush file buffer because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 fileSystem.flushFileBuffers(normalizedPath)
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
-                t.toErrorCode(ERROR_WRITE_FAULT.toLong())
+                t.toErrorCode(ERROR_WRITE_FAULT)
             }
 
         }
@@ -318,34 +370,38 @@ class DokanyOperationsProxy(
                 fileName: WString,
                 handleFileInfo: ByHandleFileInfo,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedFileName = fileName.normalizedPath()
             log.debug("GetFileInformation: {}", normalizedFileName)
-            log.trace("dokanyFileInfo in getinfo: {}", dokanyFileInfo)
+            log.trace("dokanyFileInfo in getinfo: {}", dokanyFileInfo.toFileInfo())
 
             if (isSkipFile(fileName)) {
-                return NtStatus.FILE_INVALID.mask.toLong()
+                return NtStatus.FILE_INVALID.mask
             }
 
             if(normalizedFileName == null) {
                 log.warn("Couldn't get file info because {} couldn't be normalized", fileName)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 val retrievedInfo = fileSystem.getInfo(normalizedFileName)
                 if(retrievedInfo == null) {
                     log.warn("Error reading info; couldn't get info")
-                    ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                    ErrorCode.ERROR_FILE_NOT_FOUND.mask
                 }
                 else {
                     retrievedInfo.copyTo(handleFileInfo)
-                    ErrorCode.SUCCESS.mask.toLong()
+                    ErrorCode.SUCCESS.mask
                 }
-            } catch (t: Throwable) {
+            }
+            catch(win32Error: Win32Exception) {
+                NativeMethods.DokanNtStatusFromWin32(win32Error.errorCode)
+            }
+            catch (t: Throwable) {
                 log.warn("Error reading info: {}", t.message)
-                t.toErrorCode(ERROR_WRITE_FAULT.toLong())
+                t.toErrorCode(ERROR_WRITE_FAULT)
             }
 
         }
@@ -359,22 +415,22 @@ class DokanyOperationsProxy(
                 rawPath: WString,
                 rawAttributes: Int,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
-            val attribs: EnumIntegerSet<FileAttribute> = enumSetFromInt(rawAttributes)
+            val attribs: EnumIntSet<FileAttribute> = enumSetFromInt(rawAttributes)
             log.trace("SetFileAttributes as {} for {}", attribs, normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't set file attributes because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 fileSystem.setAttributes(normalizedPath, attribs)
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
-                t.toErrorCode(ERROR_WRITE_FAULT.toLong())
+                t.toErrorCode(ERROR_WRITE_FAULT)
             }
 
         }
@@ -390,21 +446,21 @@ class DokanyOperationsProxy(
                 rawLastAccessTime: WinBase.FILETIME,
                 rawLastWriteTime: WinBase.FILETIME,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("SetFileTime for {}; creationTime = {}; lastAccessTime = {}; lastWriteTime = {}", normalizedPath, rawCreationTime, rawLastAccessTime, rawLastWriteTime)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't set file time because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 fileSystem.setTime(normalizedPath, rawCreationTime, rawLastAccessTime, rawLastWriteTime)
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
-                t.toErrorCode(ERROR_WRITE_FAULT.toLong())
+                t.toErrorCode(ERROR_WRITE_FAULT)
             }
 
         }
@@ -417,20 +473,20 @@ class DokanyOperationsProxy(
         override fun callback(
                 rawPath: WString,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("DeleteFile: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't delete file because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
-                fileSystem.deleteFile(normalizedPath, dokanyFileInfo)
+                fileSystem.deleteFile(normalizedPath, dokanyFileInfo.toFileInfo())
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -445,20 +501,20 @@ class DokanyOperationsProxy(
         override fun callback(
                 rawPath: WString,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("DeleteDirectory: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't delete directory because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
-                fileSystem.deleteDirectory(normalizedPath, dokanyFileInfo)
+                fileSystem.deleteDirectory(normalizedPath, dokanyFileInfo.toFileInfo())
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -475,7 +531,7 @@ class DokanyOperationsProxy(
                 rawNewFileName: WString,
                 rawReplaceIfExisting: Boolean,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val oldNormalizedPath = rawPath.normalizedPath()
             val newNormalizedPath = rawNewFileName.normalizedPath()
@@ -483,18 +539,18 @@ class DokanyOperationsProxy(
 
             if(oldNormalizedPath == null) {
                 log.warn("Couldn't move file because from path {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             if(newNormalizedPath == null) {
                 log.warn("Couldn't move file because to path {} couldn't be normalized", rawNewFileName)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 fileSystem.move(oldNormalizedPath, newNormalizedPath, rawReplaceIfExisting)
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -510,19 +566,19 @@ class DokanyOperationsProxy(
                 rawPath: WString,
                 rawByteOffset: Long,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("SetEndOfFile: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't set end of file because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 fileSystem.setEndOfFile(normalizedPath, rawByteOffset.toInt())
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -538,19 +594,19 @@ class DokanyOperationsProxy(
                 rawPath: WString,
                 rawLength: Long,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("SetAllocationSize: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't set allocation size because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 fileSystem.setAllocationSize(normalizedPath, rawLength.toInt())
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -567,20 +623,20 @@ class DokanyOperationsProxy(
                 rawByteOffset: Long,
                 rawLength: Long,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("LockFile: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't lock file because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 fileSystem.lock(normalizedPath, rawByteOffset.toInt(), rawLength.toInt())
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -597,20 +653,20 @@ class DokanyOperationsProxy(
                 rawByteOffset: Long,
                 rawLength: Long,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("UnlockFile: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't unlock file because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 fileSystem.unlock(normalizedPath, rawByteOffset.toInt(), rawLength.toInt())
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -627,7 +683,7 @@ class DokanyOperationsProxy(
                 totalNumberOfBytes: LongByReference,
                 totalNumberOfFreeBytes: LongByReference,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             log.trace("GetDiskFreeSpace")
             log.trace("rawFreeBytesAvailable: {}", freeBytesAvailable.value)
@@ -641,6 +697,9 @@ class DokanyOperationsProxy(
 
             // If per-user quotas are being used, this value may be less than the total number of free bytes on a disk
             freeBytesAvailable.value = freeSpace.freeBytes
+            totalNumberOfFreeBytes.value = freeSpace.freeBytes
+            totalNumberOfBytes.value = freeSpace.totalBytes
+
             log.trace("new rawFreeBytesAvailable: {}", freeBytesAvailable.value)
 
             return 0
@@ -660,7 +719,7 @@ class DokanyOperationsProxy(
                 rawFileSystemNameBuffer: Pointer,
                 rawFileSystemNameSize: Int,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             log.trace("GetVolumeInformation")
 
@@ -675,7 +734,7 @@ class DokanyOperationsProxy(
 
                 rawFileSystemNameBuffer.setWideString(0L, volumeInfo.fileSystemName.trimToSize(rawFileSystemNameSize))
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -687,11 +746,11 @@ class DokanyOperationsProxy(
             private val fileSystem: DokanyFileSystem,
             private val log: Logger
     ) : IMounted {
-        override fun mounted(dokanyFileInfo: DokanyFileInfo): Long {
+        override fun mounted(dokanyFileInfo: DokanyFileInfo): Int {
             return try {
                 fileSystem.mounted()
                 log.info("Dokany File System mounted")
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -703,11 +762,11 @@ class DokanyOperationsProxy(
             private val fileSystem: DokanyFileSystem,
             private val log: Logger
     ) : IUnmounted {
-        override fun unmounted(dokanyFileInfo: DokanyFileInfo): Long {
+        override fun unmounted(dokanyFileInfo: DokanyFileInfo): Int {
             return try {
                 fileSystem.unmounted()
                 log.info("Dokany File System unmounted")
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -726,14 +785,14 @@ class DokanyOperationsProxy(
                 rawSecurityDescriptorLength: Int,
                 rawSecurityDescriptorLengthNeeded: IntByReference,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("SetFileSecurity: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't get file security because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
@@ -742,7 +801,7 @@ class DokanyOperationsProxy(
                 rawSecurityDescriptor.write(0L, out, 0, rawSecurityDescriptorLength)
                 rawSecurityDescriptorLengthNeeded.value = expectedLength
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -760,14 +819,14 @@ class DokanyOperationsProxy(
                 rawSecurityDescriptor: Pointer,
                 rawSecurityDescriptorLength: Int,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("SetFileSecurity: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't set file security because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
@@ -775,7 +834,7 @@ class DokanyOperationsProxy(
                 rawSecurityDescriptor.read(0L, data, 0, rawSecurityDescriptorLength)
                 fileSystem.setSecurity(normalizedPath, rawSecurityInformation, data)
 
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
@@ -791,21 +850,21 @@ class DokanyOperationsProxy(
                 rawPath: WString,
                 rawFillFindData: IFillWin32FindStreamData,
                 dokanyFileInfo: DokanyFileInfo
-        ): Long {
+        ): Int {
 
             val normalizedPath = rawPath.normalizedPath()
             log.trace("FindStreams: {}", normalizedPath)
 
             if(normalizedPath == null) {
                 log.warn("Couldn't find streams because {} couldn't be normalized", rawPath)
-                return ErrorCode.ERROR_FILE_NOT_FOUND.mask.toLong()
+                return ErrorCode.ERROR_FILE_NOT_FOUND.mask
             }
 
             return try {
                 val streams = fileSystem.findStreams(normalizedPath)
                 log.debug("Found {} streams", streams.size)
                 streams.forEach { file -> rawFillFindData.callback(file, dokanyFileInfo) }
-                ErrorCode.SUCCESS.mask.toLong()
+                ErrorCode.SUCCESS.mask
             } catch (t: Throwable) {
                 t.toErrorCode()
             }
